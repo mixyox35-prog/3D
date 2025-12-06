@@ -86,7 +86,6 @@
             font-size: 1.2rem;
             color: #a0e7ff;
             margin-bottom: 30px;
-            font-weight: 300;
         }
         
         .instructions {
@@ -189,20 +188,44 @@
             transition: all 0.5s ease;
         }
         
+        .controls-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        
         .controls-title {
             font-family: 'Orbitron', sans-serif;
             color: #00FFFF;
-            margin-bottom: 15px;
             font-size: 1.2rem;
             display: flex;
             align-items: center;
-            border-bottom: 1px solid rgba(0, 200, 255, 0.3);
-            padding-bottom: 10px;
         }
         
         .controls-title:before {
             content: "🎮";
             margin-right: 10px;
+        }
+        
+        #closeControls {
+            background: rgba(255, 50, 50, 0.7);
+            color: white;
+            border: none;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 1.2rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+        }
+        
+        #closeControls:hover {
+            background: rgba(255, 0, 0, 0.9);
+            transform: scale(1.1);
         }
         
         .control-group {
@@ -309,23 +332,6 @@
             margin-right: 8px;
         }
         
-        /* Particle Info Display */
-        #particleInfo {
-            position: absolute;
-            bottom: 20px;
-            right: 20px;
-            background: rgba(0, 10, 30, 0.85);
-            padding: 15px;
-            border-radius: 15px;
-            color: #fff;
-            z-index: 50;
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(0, 200, 255, 0.3);
-            box-shadow: 0 0 30px rgba(0, 100, 255, 0.2);
-            display: none;
-            min-width: 200px;
-        }
-        
         /* Toggle Controls Button */
         #toggleControls {
             position: absolute;
@@ -355,6 +361,35 @@
         /* Video Element (hidden) */
         #videoElement {
             display: none;
+        }
+        
+        /* Camera Status */
+        #cameraStatus {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.7);
+            padding: 10px 20px;
+            border-radius: 20px;
+            color: white;
+            font-size: 0.9rem;
+            z-index: 100;
+            display: none;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .camera-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #ff4444;
+            animation: pulse 1s infinite;
+        }
+        
+        .camera-dot.active {
+            background: #00ff00;
         }
         
         /* Animations */
@@ -390,11 +425,12 @@
                 width: auto;
             }
             
-            #particleInfo {
-                left: 10px;
+            #toggleControls {
+                top: 10px;
                 right: 10px;
-                bottom: 10px;
-                width: auto;
+                width: 40px;
+                height: 40px;
+                font-size: 1.2rem;
             }
         }
     </style>
@@ -428,7 +464,10 @@
 
     <!-- Controls Panel -->
     <div id="controls">
-        <div class="controls-title">CONTROL PANEL</div>
+        <div class="controls-header">
+            <div class="controls-title">CONTROL PANEL</div>
+            <button id="closeControls" title="Close Panel">✕</button>
+        </div>
         
         <div class="control-group">
             <div class="control-label">SHAPE SELECTION</div>
@@ -438,7 +477,6 @@
                 <button class="shape-btn" onclick="setShape('GALAXY')">🌌 Galaxy</button>
                 <button class="shape-btn" onclick="setShape('TORUS')">🌀 Torus</button>
                 <button class="shape-btn" onclick="setShape('WAVE')">🌊 Wave</button>
-                <button class="shape-btn" onclick="setShape('FIREWORK')">🎆 Firework</button>
             </div>
         </div>
         
@@ -471,17 +509,14 @@
     <!-- Toggle Controls Button -->
     <div id="toggleControls" onclick="toggleControlPanel()">⚙️</div>
 
-    <!-- Particle Info Display -->
-    <div id="particleInfo">
-        <div style="font-family: 'Orbitron', sans-serif; color: #00FFFF; margin-bottom: 10px;">PARTICLE INFO</div>
-        <div>Shape: <span id="currentShape">Sphere</span></div>
-        <div>Color: <span id="currentColor">#00ccff</span></div>
-        <div>Position: <span id="currentPos">X: 0.00, Y: 0.00</span></div>
-        <div>Scale: <span id="currentScale">1.00</span></div>
+    <!-- Camera Status Indicator -->
+    <div id="cameraStatus">
+        <div class="camera-dot"></div>
+        <span>Camera: Off</span>
     </div>
 
     <!-- Video Element for Hand Tracking -->
-    <video id="videoElement"></video>
+    <video id="videoElement" autoplay playsinline></video>
     
     <!-- Container for Three.js Canvas -->
     <div id="container"></div>
@@ -510,7 +545,11 @@
         let smoothHandY = 0;
         let smoothScale = 1;
         
-        // ========== THREE.JS SETUP ==========
+        // Camera and Hand Tracking
+        let hands = null;
+        let cameraStream = null;
+
+        // ========== INITIALIZE THREE.JS ==========
         function initThree() {
             // Create Scene
             scene = new THREE.Scene();
@@ -521,10 +560,15 @@
             camera.position.z = 20;
             
             // Create Renderer
-            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer = new THREE.WebGLRenderer({ 
+                antialias: true, 
+                alpha: true,
+                powerPreference: "high-performance"
+            });
             renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
             renderer.shadowMap.enabled = true;
+            renderer.setClearColor(0x000000, 0); // Transparent background
             document.getElementById('container').appendChild(renderer.domElement);
             
             // Add Lights
@@ -547,14 +591,14 @@
             
             // Show UI Elements
             document.getElementById('toggleControls').style.display = 'flex';
-            document.getElementById('particleInfo').style.display = 'block';
             
             // Add event listeners
             window.addEventListener('resize', onWindowResize);
             document.getElementById('sizeSlider').addEventListener('input', updateParticleSize);
+            document.getElementById('closeControls').addEventListener('click', closeControlPanel);
             
-            // Update particle info
-            updateParticleInfo();
+            // Initialize camera status
+            updateCameraStatus(true);
         }
         
         // ========== CREATE PARTICLES WITH DIFFERENT SHAPES ==========
@@ -621,19 +665,6 @@
                         z = waveZ;
                         break;
                         
-                    case 'FIREWORK':
-                        const radiusFirework = Math.random() * 8;
-                        const thetaFirework = Math.random() * Math.PI * 2;
-                        const phiFirework = Math.random() * Math.PI;
-                        x = radiusFirework * Math.sin(phiFirework) * Math.cos(thetaFirework);
-                        y = radiusFirework * Math.sin(phiFirework) * Math.sin(thetaFirework);
-                        z = radiusFirework * Math.cos(phiFirework);
-                        // Add some randomness for firework effect
-                        x += (Math.random() - 0.5) * 2;
-                        y += (Math.random() - 0.5) * 2;
-                        z += (Math.random() - 0.5) * 2;
-                        break;
-                        
                     default:
                         x = y = z = 0;
                 }
@@ -670,7 +701,6 @@
             
             // Update UI
             updateShapeButtons(shape);
-            updateParticleInfo();
         }
         
         // ========== ANIMATION LOOP ==========
@@ -717,97 +747,116 @@
                 }
                 
                 // Update lights to follow camera
-                pointLight.position.x = camera.position.x + 5;
-                pointLight.position.y = camera.position.y + 5;
-                pointLight.position.z = camera.position.z + 5;
-                
-                // Update particle info display
-                updateParticleInfo();
+                if (pointLight) {
+                    pointLight.position.x = camera.position.x + 5;
+                    pointLight.position.y = camera.position.y + 5;
+                    pointLight.position.z = camera.position.z + 5;
+                }
             }
             
             // Render scene
-            renderer.render(scene, camera);
+            if (renderer && scene && camera) {
+                renderer.render(scene, camera);
+            }
         }
         
         // ========== HAND TRACKING WITH MEDIAPIPE ==========
-        const videoElement = document.getElementById('videoElement');
-        
         async function startCameraApp() {
-            document.getElementById('startButton').innerText = "Initializing...";
-            
-            // Initialize MediaPipe Hands
-            const hands = new Hands({
-                locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
-            });
-            
-            // Configure hand tracking
-            hands.setOptions({
-                maxNumHands: 1, // Single hand mode
-                modelComplexity: 1,
-                minDetectionConfidence: 0.7,
-                minTrackingConfidence: 0.7
-            });
-            
-            // Process hand tracking results
-            hands.onResults((results) => {
-                if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-                    isHandDetected = true;
-                    lastHandUpdate = Date.now();
-                    const landmarks = results.multiHandLandmarks[0];
-                    
-                    // Track index finger tip (landmark 8) for position
-                    const indexTip = landmarks[8];
-                    handX = (0.5 - indexTip.x) * 35; // Map to scene coordinates
-                    handY = (0.5 - indexTip.y) * 25;
-                    
-                    // Calculate pinch distance between thumb tip (4) and index tip (8)
-                    const thumbTip = landmarks[4];
-                    const dx = thumbTip.x - indexTip.x;
-                    const dy = thumbTip.y - indexTip.y;
-                    const dist = Math.sqrt(dx * dx + dy * dy);
-                    
-                    // Map distance to 0-1 range
-                    pinchDistance = Math.min(1, Math.max(0, (dist - 0.02) * 6));
-                    
-                    // Update status display
-                    document.getElementById('status').innerHTML = `
-                        <div class="hand-status">Hand Tracking Active</div>
-                        <div id="pinchStatus">Pinch: ${Math.round(pinchDistance * 100)}%</div>
-                        <div id="particleCount">Particles: ${numParticles.toLocaleString()}</div>
-                    `;
-                    
-                    // Update status color based on pinch
-                    const pinchStatus = document.getElementById('pinchStatus');
-                    if (pinchDistance > 0.8) {
-                        pinchStatus.style.color = '#00ff00';
-                    } else if (pinchDistance > 0.3) {
-                        pinchStatus.style.color = '#ffff00';
-                    } else {
-                        pinchStatus.style.color = '#ff4444';
-                    }
-                } else {
-                    // No hand detected
-                    if (Date.now() - lastHandUpdate > 500) {
-                        isHandDetected = false;
-                        document.getElementById('status').innerHTML = `
-                            <div class="hand-status">Show your hand to the camera</div>
-                            <div id="pinchStatus">Pinch: 0%</div>
-                            <div id="particleCount">Particles: ${numParticles.toLocaleString()}</div>
-                        `;
-                    }
-                }
-            });
-            
-            // Start camera
-            const camera = new Camera(videoElement, {
-                onFrame: async () => {
-                    await hands.send({ image: videoElement });
-                },
-                width: 640,
-                height: 480
-            });
+            document.getElementById('startButton').innerText = "Starting Camera...";
+            document.getElementById('startButton').disabled = true;
             
             try {
+                // Get camera access
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { 
+                        width: { ideal: 640 }, 
+                        height: { ideal: 480 },
+                        facingMode: 'user' 
+                    } 
+                });
+                
+                cameraStream = stream;
+                const videoElement = document.getElementById('videoElement');
+                videoElement.srcObject = stream;
+                
+                // Initialize MediaPipe Hands
+                hands = new self.Hands({
+                    locateFile: (file) => {
+                        return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
+                    }
+                });
+                
+                // Configure hand tracking
+                hands.setOptions({
+                    maxNumHands: 1,
+                    modelComplexity: 1,
+                    minDetectionConfidence: 0.5,
+                    minTrackingConfidence: 0.5
+                });
+                
+                // Process hand tracking results
+                hands.onResults((results) => {
+                    if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                        isHandDetected = true;
+                        lastHandUpdate = Date.now();
+                        const landmarks = results.multiHandLandmarks[0];
+                        
+                        // Track index finger tip (landmark 8) for position
+                        const indexTip = landmarks[8];
+                        handX = (0.5 - indexTip.x) * 35; // Map to scene coordinates
+                        handY = (0.5 - indexTip.y) * 25;
+                        
+                        // Calculate pinch distance between thumb tip (4) and index tip (8)
+                        const thumbTip = landmarks[4];
+                        const dx = thumbTip.x - indexTip.x;
+                        const dy = thumbTip.y - indexTip.y;
+                        const dist = Math.sqrt(dx * dx + dy * dy);
+                        
+                        // Map distance to 0-1 range
+                        pinchDistance = Math.min(1, Math.max(0, (dist - 0.02) * 6));
+                        
+                        // Update status display
+                        document.getElementById('status').innerHTML = `
+                            <div class="hand-status">Hand Tracking Active</div>
+                            <div id="pinchStatus">Pinch: ${Math.round(pinchDistance * 100)}%</div>
+                            <div id="particleCount">Particles: ${numParticles.toLocaleString()}</div>
+                        `;
+                        
+                        // Update status color based on pinch
+                        const pinchStatus = document.getElementById('pinchStatus');
+                        if (pinchStatus) {
+                            if (pinchDistance > 0.8) {
+                                pinchStatus.style.color = '#00ff00';
+                            } else if (pinchDistance > 0.3) {
+                                pinchStatus.style.color = '#ffff00';
+                            } else {
+                                pinchStatus.style.color = '#ff4444';
+                            }
+                        }
+                    } else {
+                        // No hand detected
+                        if (Date.now() - lastHandUpdate > 500) {
+                            isHandDetected = false;
+                            document.getElementById('status').innerHTML = `
+                                <div class="hand-status">Show your hand to the camera</div>
+                                <div id="pinchStatus">Pinch: 0%</div>
+                                <div id="particleCount">Particles: ${numParticles.toLocaleString()}</div>
+                            `;
+                        }
+                    }
+                });
+                
+                // Start processing video frames
+                const camera = new self.Camera(videoElement, {
+                    onFrame: async () => {
+                        if (hands) {
+                            await hands.send({ image: videoElement });
+                        }
+                    },
+                    width: 640,
+                    height: 480
+                });
+                
                 await camera.start();
                 
                 // Hide overlay and show controls
@@ -817,12 +866,20 @@
                 }, 800);
                 
                 document.getElementById('controls').style.display = 'block';
+                document.getElementById('cameraStatus').style.display = 'flex';
                 
                 // Initialize Three.js
                 initThree();
+                
+                // Update camera status
+                updateCameraStatus(true);
+                
             } catch (error) {
-                alert("Camera Error: " + error.message);
+                console.error("Camera Error:", error);
+                alert("Camera access denied or error occurred. Please allow camera access and try again.");
                 document.getElementById('startButton').innerText = "Try Again";
+                document.getElementById('startButton').disabled = false;
+                updateCameraStatus(false);
             }
         }
         
@@ -861,8 +918,7 @@
                 'CUBE': 'Cube',
                 'GALAXY': 'Galaxy',
                 'TORUS': 'Torus',
-                'WAVE': 'Wave',
-                'FIREWORK': 'Firework'
+                'WAVE': 'Wave'
             };
             return shapeNames[shape] || shape;
         }
@@ -875,13 +931,19 @@
             }
         }
         
-        function updateParticleInfo() {
-            if (particles) {
-                document.getElementById('currentShape').textContent = getShapeName(currentShape);
-                document.getElementById('currentColor').textContent = currentColor;
-                document.getElementById('currentPos').textContent = 
-                    `X: ${particles.position.x.toFixed(2)}, Y: ${particles.position.y.toFixed(2)}`;
-                document.getElementById('currentScale').textContent = particles.scale.x.toFixed(2);
+        function updateCameraStatus(isActive) {
+            const statusElement = document.getElementById('cameraStatus');
+            const dotElement = statusElement.querySelector('.camera-dot');
+            const textElement = statusElement.querySelector('span');
+            
+            if (isActive) {
+                dotElement.classList.add('active');
+                textElement.textContent = 'Camera: Active';
+                statusElement.style.display = 'flex';
+            } else {
+                dotElement.classList.remove('active');
+                textElement.textContent = 'Camera: Error';
+                statusElement.style.display = 'flex';
             }
         }
         
@@ -891,10 +953,18 @@
             document.getElementById('toggleControls').textContent = controlsVisible ? '⚙️' : '🎛️';
         }
         
+        function closeControlPanel() {
+            controlsVisible = false;
+            document.getElementById('controls').style.display = 'none';
+            document.getElementById('toggleControls').style.display = 'flex';
+        }
+        
         function onWindowResize() {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
+            if (camera && renderer) {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            }
         }
         
         // ========== EVENT LISTENERS ==========
@@ -906,7 +976,8 @@
         // Pre-defined color presets
         document.querySelectorAll('.color-preset').forEach(preset => {
             preset.addEventListener('click', function() {
-                const color = this.getAttribute('onclick').match(/'([^']+)'/)[1];
+                const onclickAttr = this.getAttribute('onclick');
+                const color = onclickAttr.match(/'([^']+)'/)[1];
                 setColor(color);
             });
         });
@@ -918,9 +989,14 @@
                 toggleControlPanel();
             }
             
+            // Close controls with Escape key
+            if (e.key === 'Escape') {
+                closeControlPanel();
+            }
+            
             // Change shapes with number keys
-            if (e.key >= '1' && e.key <= '6') {
-                const shapes = ['SPHERE', 'CUBE', 'GALAXY', 'TORUS', 'WAVE', 'FIREWORK'];
+            if (e.key >= '1' && e.key <= '5') {
+                const shapes = ['SPHERE', 'CUBE', 'GALAXY', 'TORUS', 'WAVE'];
                 const index = parseInt(e.key) - 1;
                 if (index < shapes.length) {
                     setShape(shapes[index]);
@@ -934,8 +1010,34 @@
             }
         });
         
+        // Show/hide controls on hover
+        document.getElementById('toggleControls').addEventListener('mouseenter', function() {
+            if (!controlsVisible) {
+                this.style.background = 'rgba(0, 100, 200, 0.9)';
+            }
+        });
+        
+        document.getElementById('toggleControls').addEventListener('mouseleave', function() {
+            if (!controlsVisible) {
+                this.style.background = 'rgba(0, 10, 30, 0.85)';
+            }
+        });
+        
         // Initial color setup
         setColor('#00ccff');
+        
+        // Clean up on page unload
+        window.addEventListener('beforeunload', function() {
+            if (cameraStream) {
+                cameraStream.getTracks().forEach(track => track.stop());
+            }
+        });
+        
+        // Add error handling for Three.js
+        window.addEventListener('error', function(e) {
+            console.error('Three.js Error:', e.error);
+            alert('There was an error initializing the 3D graphics. Please refresh the page.');
+        });
     </script>
 </body>
 </html>

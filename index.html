@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D Hand Particles (Fixed)</title>
+    <title>Single Hand Magic</title>
     
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     
@@ -14,56 +14,37 @@
     <style>
         body { margin: 0; overflow: hidden; background-color: #000; font-family: sans-serif; }
         
-        /* Start Overlay Styling */
         #overlay {
-            position: absolute;
-            top: 0; left: 0; width: 100%; height: 100%;
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0,0,0,0.9);
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            z-index: 200;
-            color: white;
+            display: flex; flex-direction: column;
+            justify-content: center; align-items: center; z-index: 200; color: white;
         }
         #startButton {
-            padding: 15px 30px;
-            font-size: 20px;
-            background: #00FFFF;
-            border: none;
-            cursor: pointer;
-            border-radius: 50px;
-            font-weight: bold;
-            box-shadow: 0 0 20px #00FFFF;
-            margin-top: 20px;
+            padding: 15px 30px; font-size: 20px; background: #00FFFF;
+            border: none; cursor: pointer; border-radius: 50px;
+            font-weight: bold; box-shadow: 0 0 20px #00FFFF; margin-top: 20px;
         }
-        #startButton:hover { transform: scale(1.1); }
-
-        /* Controls Styling */
+        
         #controls {
             position: absolute; top: 10px; left: 10px;
-            background: rgba(0, 0, 0, 0.7);
-            padding: 15px; border-radius: 8px; color: #fff;
-            z-index: 100; display: none; /* Initially hidden */
+            background: rgba(0, 0, 0, 0.7); padding: 15px;
+            border-radius: 8px; color: #fff; z-index: 100; display: none;
         }
         button.shape-btn {
             background: #333; color: #fff; border: 1px solid #555;
             padding: 5px 10px; margin: 2px; cursor: pointer;
         }
         button.shape-btn:hover { background: #00FFFF; color: #000; }
-        
         #videoElement { display: none; }
     </style>
 </head>
 <body>
 
     <div id="overlay">
-        <h1>Interactive 3D Particles</h1>
-        <p>This app requires Camera Access to track your hands.</p>
+        <h1>Single Hand Magic</h1>
+        <p>Control Particles with 1 Hand (Pinch to Resize)</p>
         <button id="startButton">START CAMERA</button>
-        <p style="font-size: 12px; color: #888; margin-top: 20px;">
-            Note: Use Local Server (http://localhost) not file://
-        </p>
     </div>
 
     <div id="controls">
@@ -74,9 +55,9 @@
             <button class="shape-btn" onclick="setShape('GALAXY')">Galaxy</button>
         </div>
         <div>
-            <strong>Color:</strong> <input type="color" id="colorInput" value="#00ffff">
+            <strong>Color:</strong> <input type="color" id="colorInput" value="#ff0055">
         </div>
-        <div id="status" style="margin-top:10px; color:#00ff00; font-size:12px;">Waiting...</div>
+        <div id="status" style="margin-top:10px; color:#00ff00; font-size:12px;">Waiting for hand...</div>
     </div>
 
     <video id="videoElement"></video>
@@ -84,28 +65,29 @@
 
 <script>
     let scene, camera, renderer, particles, geometry, material;
-    let handDistance = 0; 
-    let isTracking = false;
-    const numParticles = 15000;
+    
+    // Tracking Variables
+    let pinchDistance = 0.5; // Controls Scale (0 to 1)
+    let handX = 0;           // Controls Position X
+    let handY = 0;           // Controls Position Y
+    let isHandDetected = false;
 
-    // --- 1. THREE.JS INIT ---
+    const numParticles = 12000;
+
+    // --- 1. THREE.JS SETUP ---
     function initThree() {
         scene = new THREE.Scene();
         camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
         renderer = new THREE.WebGLRenderer({antialias: true});
         renderer.setSize(window.innerWidth, window.innerHeight);
         document.getElementById('container').appendChild(renderer.domElement);
-        camera.position.z = 15;
-
-        // Add Lights
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
-        scene.add(ambientLight);
+        camera.position.z = 20;
 
         createParticles('SPHERE');
         animate();
     }
 
-    // --- 2. PARTICLE SYSTEM ---
+    // --- 2. CREATE PARTICLES ---
     function createParticles(shape) {
         if(particles) scene.remove(particles);
 
@@ -116,33 +98,25 @@
 
         for(let i=0; i<numParticles; i++) {
             let x, y, z;
-            
             if(shape === 'SPHERE') {
-                const r = 5;
+                const r = 6;
                 const theta = Math.random() * Math.PI * 2;
                 const phi = Math.acos(2 * Math.random() - 1);
                 x = r * Math.sin(phi) * Math.cos(theta);
                 y = r * Math.sin(phi) * Math.sin(theta);
                 z = r * Math.cos(phi);
             } else if (shape === 'CUBE') {
-                const s = 8;
+                const s = 10;
                 x = (Math.random() - 0.5) * s;
                 y = (Math.random() - 0.5) * s;
                 z = (Math.random() - 0.5) * s;
             } else { // GALAXY
                 const angle = Math.random() * Math.PI * 2;
-                const radius = Math.random() * 8;
-                // Spiral effect
-                x = Math.cos(angle + radius) * radius; 
-                y = (Math.random() - 0.5) * 2;
-                z = Math.sin(angle + radius) * radius;
+                const radius = Math.random() * 10;
+                x = Math.cos(angle) * radius;
+                y = (Math.random() - 0.5) * 3;
+                z = Math.sin(angle) * radius;
             }
-
-            // Add randomness (Jitter)
-            x += (Math.random() - 0.5);
-            y += (Math.random() - 0.5);
-            z += (Math.random() - 0.5);
-
             positions.push(x, y, z);
             colors.push(baseColor.r, baseColor.g, baseColor.b);
         }
@@ -151,11 +125,8 @@
         geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
 
         material = new THREE.PointsMaterial({
-            size: 0.08,
-            vertexColors: true,
-            blending: THREE.AdditiveBlending,
-            transparent: true,
-            opacity: 0.8
+            size: 0.1, vertexColors: true, blending: THREE.AdditiveBlending,
+            transparent: true, opacity: 0.8
         });
 
         particles = new THREE.Points(geometry, material);
@@ -163,98 +134,107 @@
     }
 
     function setShape(shape) { createParticles(shape); }
-
-    document.getElementById('colorInput').addEventListener('input', () => {
-        createParticles('SPHERE'); // Refresh to apply color
-    });
+    document.getElementById('colorInput').addEventListener('input', () => createParticles('SPHERE'));
 
     // --- 3. ANIMATION LOOP ---
     function animate() {
         requestAnimationFrame(animate);
 
         if(particles) {
-            particles.rotation.y += 0.002;
-            
-            // Interaction: Expansion based on Hand Distance
-            // handDistance goes 0 -> 1. 
-            // We want Scale 1 -> 3
-            let targetScale = 1 + (handDistance * 2); 
-            
-            // Smooth lerp
-            particles.scale.x += (targetScale - particles.scale.x) * 0.1;
-            particles.scale.y += (targetScale - particles.scale.y) * 0.1;
-            particles.scale.z += (targetScale - particles.scale.z) * 0.1;
+            // A. Rotation (Always spinning slowly)
+            particles.rotation.y += 0.003;
+            particles.rotation.z += 0.001;
+
+            if(isHandDetected) {
+                // B. Position Tracking (Follow Hand)
+                // Smooth Movement (Lerp)
+                particles.position.x += (handX - particles.position.x) * 0.1;
+                particles.position.y += (handY - particles.position.y) * 0.1;
+
+                // C. Scale Control (Pinch)
+                // Pinch Open (High Dist) -> Scale Big
+                // Pinch Closed (Low Dist) -> Scale Small
+                let targetScale = 0.2 + (pinchDistance * 3); 
+                particles.scale.setScalar(
+                    particles.scale.x + (targetScale - particles.scale.x) * 0.1
+                );
+            } else {
+                // Idle state (Center and Normal size)
+                particles.position.x += (0 - particles.position.x) * 0.05;
+                particles.position.y += (0 - particles.position.y) * 0.05;
+                particles.scale.setScalar(
+                    particles.scale.x + (1 - particles.scale.x) * 0.05
+                );
+            }
         }
         renderer.render(scene, camera);
     }
 
-    // --- 4. CAMERA & MEDIAPIPE LOGIC ---
+    // --- 4. CAMERA & SINGLE HAND LOGIC ---
     const videoElement = document.getElementById('videoElement');
 
     async function startCameraApp() {
-        document.getElementById('startButton').innerText = "Loading AI...";
+        document.getElementById('startButton').innerText = "Starting...";
         
-        const hands = new Hands({locateFile: (file) => {
-            return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
-        }});
+        const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
 
         hands.setOptions({
-            maxNumHands: 2,
+            maxNumHands: 1, // Single Hand Mode
             modelComplexity: 1,
             minDetectionConfidence: 0.5,
             minTrackingConfidence: 0.5
         });
 
         hands.onResults((results) => {
-            if(results.multiHandLandmarks && results.multiHandLandmarks.length === 2) {
-                document.getElementById('status').innerText = "Tracking: 2 Hands Detected";
-                
-                // Calculate distance between index tips
-                const h1 = results.multiHandLandmarks[0][8];
-                const h2 = results.multiHandLandmarks[1][8];
-                
-                const dx = h1.x - h2.x;
-                const dy = h1.y - h2.y;
+            if(results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                isHandDetected = true;
+                const landmarks = results.multiHandLandmarks[0];
+
+                // 1. POSITION: Track Index Finger Tip (Landmark 8)
+                const indexTip = landmarks[8];
+                // Map 0-1 coords to Three.js World Coords (approx -20 to +20)
+                // Note: X is flipped because camera is mirrored
+                handX = (0.5 - indexTip.x) * 35; 
+                handY = (0.5 - indexTip.y) * 25; 
+
+                // 2. PINCH: Distance between Thumb Tip (4) and Index Tip (8)
+                const thumbTip = landmarks[4];
+                const dx = thumbTip.x - indexTip.x;
+                const dy = thumbTip.y - indexTip.y;
                 const dist = Math.sqrt(dx*dx + dy*dy);
+
+                // Map Distance (approx 0.02 to 0.2) to 0-1 range
+                // Pinch Closed (~0.02) -> 0
+                // Pinch Open (~0.2) -> 1
+                pinchDistance = Math.min(1, Math.max(0, (dist - 0.02) * 6));
                 
-                // Map dist (approx 0.05 to 0.6) to 0-1
-                handDistance = Math.max(0, Math.min(1, (dist - 0.1) * 2));
+                document.getElementById('status').innerText = "Tracking Hand | Pinch: " + Math.round(pinchDistance * 100) + "%";
             } else {
-                document.getElementById('status').innerText = "Show BOTH hands to control size";
-                handDistance = 0; // Reset
+                isHandDetected = false;
+                document.getElementById('status').innerText = "Show your hand...";
             }
         });
 
         const camera = new Camera(videoElement, {
-            onFrame: async () => {
-                await hands.send({image: videoElement});
-            },
-            width: 640,
-            height: 480
+            onFrame: async () => await hands.send({image: videoElement}),
+            width: 640, height: 480
         });
 
         try {
             await camera.start();
-            // Start success
             document.getElementById('overlay').style.display = 'none';
             document.getElementById('controls').style.display = 'block';
             initThree();
         } catch (error) {
-            alert("Camera Error: " + error.message + "\nPlease use Localhost, not file://");
-            document.getElementById('startButton').innerText = "FAILED (See Alert)";
+            alert("Error: " + error.message);
         }
     }
 
-    // Button Click Listener
     document.getElementById('startButton').addEventListener('click', startCameraApp);
-
-    // Resize Handler
     window.addEventListener('resize', () => {
-        if(camera) {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        }
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
     });
 
 </script>

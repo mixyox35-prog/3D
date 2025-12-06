@@ -1,0 +1,791 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gesture-Controlled 3D Particle System</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #0c0c0c 0%, #1a1a2e 100%);
+            color: #fff;
+            overflow: hidden;
+            height: 100vh;
+        }
+
+        #container {
+            position: relative;
+            width: 100%;
+            height: 100vh;
+        }
+
+        #canvas-container {
+            width: 100%;
+            height: 100%;
+        }
+
+        #ui {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 10;
+            background: rgba(25, 25, 35, 0.85);
+            backdrop-filter: blur(10px);
+            border-radius: 16px;
+            padding: 24px;
+            width: 320px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        h1 {
+            font-size: 24px;
+            margin-bottom: 5px;
+            font-weight: 600;
+            background: linear-gradient(90deg, #6a11cb 0%, #2575fc 100%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+        }
+
+        .subtitle {
+            color: #a0a0c0;
+            margin-bottom: 24px;
+            font-size: 14px;
+        }
+
+        .control-group {
+            margin-bottom: 24px;
+        }
+
+        h2 {
+            font-size: 16px;
+            margin-bottom: 12px;
+            color: #e0e0ff;
+            font-weight: 500;
+        }
+
+        .template-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+        }
+
+        .template-btn {
+            background: rgba(40, 40, 60, 0.7);
+            border: none;
+            border-radius: 10px;
+            padding: 12px 8px;
+            color: #ccc;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .template-btn:hover {
+            background: rgba(60, 60, 90, 0.8);
+            transform: translateY(-2px);
+        }
+
+        .template-btn.active {
+            background: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%);
+            color: white;
+            box-shadow: 0 5px 15px rgba(106, 17, 203, 0.4);
+        }
+
+        .template-icon {
+            font-size: 20px;
+            margin-bottom: 5px;
+        }
+
+        .color-picker {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .color-option {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            cursor: pointer;
+            border: 2px solid transparent;
+            transition: transform 0.2s ease;
+        }
+
+        .color-option:hover {
+            transform: scale(1.1);
+        }
+
+        .color-option.active {
+            border-color: white;
+            transform: scale(1.1);
+        }
+
+        .slider-container {
+            margin-top: 10px;
+        }
+
+        .slider-label {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+            font-size: 14px;
+        }
+
+        .slider {
+            width: 100%;
+            height: 6px;
+            -webkit-appearance: none;
+            appearance: none;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+            outline: none;
+        }
+
+        .slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #6a11cb;
+            cursor: pointer;
+        }
+
+        .gesture-simulator {
+            background: rgba(30, 30, 45, 0.8);
+            border-radius: 10px;
+            padding: 15px;
+            margin-top: 20px;
+            text-align: center;
+        }
+
+        .gesture-buttons {
+            display: flex;
+            justify-content: space-around;
+            margin-top: 10px;
+        }
+
+        .gesture-btn {
+            background: rgba(60, 60, 90, 0.8);
+            border: none;
+            border-radius: 8px;
+            padding: 10px 15px;
+            color: #ccc;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .gesture-btn:hover {
+            background: rgba(80, 80, 110, 0.9);
+        }
+
+        .gesture-btn:active {
+            background: #6a11cb;
+        }
+
+        #gesture-status {
+            margin-top: 15px;
+            font-size: 14px;
+            color: #a0a0c0;
+        }
+
+        #gesture-visual {
+            width: 100px;
+            height: 100px;
+            margin: 10px auto;
+            border-radius: 50%;
+            background: rgba(106, 17, 203, 0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+        }
+
+        .instructions {
+            font-size: 12px;
+            color: #888;
+            margin-top: 20px;
+            text-align: center;
+            line-height: 1.5;
+        }
+
+        .particle-count {
+            font-size: 12px;
+            color: #a0a0c0;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <div id="canvas-container"></div>
+        
+        <div id="ui">
+            <h1>Gesture Particle System</h1>
+            <p class="subtitle">Control particles with hand gestures • Real-time 3D visualization</p>
+            
+            <div class="control-group">
+                <h2>Particle Template</h2>
+                <div class="template-grid">
+                    <button class="template-btn active" data-template="heart">
+                        <span class="template-icon">❤️</span>
+                        <span>Heart</span>
+                    </button>
+                    <button class="template-btn" data-template="flower">
+                        <span class="template-icon">🌼</span>
+                        <span>Flower</span>
+                    </button>
+                    <button class="template-btn" data-template="saturn">
+                        <span class="template-icon">🪐</span>
+                        <span>Saturn</span>
+                    </button>
+                    <button class="template-btn" data-template="buddha">
+                        <span class="template-icon">🙏</span>
+                        <span>Buddha</span>
+                    </button>
+                    <button class="template-btn" data-template="fireworks">
+                        <span class="template-icon">🎆</span>
+                        <span>Fireworks</span>
+                    </button>
+                    <button class="template-btn" data-template="galaxy">
+                        <span class="template-icon">🌌</span>
+                        <span>Galaxy</span>
+                    </button>
+                </div>
+                <div class="particle-count" id="particle-count">Particles: 1500</div>
+            </div>
+            
+            <div class="control-group">
+                <h2>Particle Color</h2>
+                <div class="color-picker">
+                    <div class="color-option active" style="background-color: #ff4d8d;" data-color="#ff4d8d"></div>
+                    <div class="color-option" style="background-color: #6a11cb;" data-color="#6a11cb"></div>
+                    <div class="color-option" style="background-color: #2575fc;" data-color="#2575fc"></div>
+                    <div class="color-option" style="background-color: #00c9ff;" data-color="#00c9ff"></div>
+                    <div class="color-option" style="background-color: #00ff95;" data-color="#00ff95"></div>
+                    <div class="color-option" style="background-color: #ffcc00;" data-color="#ffcc00"></div>
+                </div>
+            </div>
+            
+            <div class="control-group">
+                <h2>Particle Controls</h2>
+                <div class="slider-container">
+                    <div class="slider-label">
+                        <span>Size</span>
+                        <span id="size-value">2.0</span>
+                    </div>
+                    <input type="range" min="0.5" max="5" step="0.1" value="2.0" class="slider" id="size-slider">
+                </div>
+                <div class="slider-container">
+                    <div class="slider-label">
+                        <span>Spread</span>
+                        <span id="spread-value">1.0</span>
+                    </div>
+                    <input type="range" min="0.1" max="3" step="0.1" value="1.0" class="slider" id="spread-slider">
+                </div>
+            </div>
+            
+            <div class="gesture-simulator">
+                <h2>Gesture Simulation</h2>
+                <p id="gesture-status">Hands: Detected | Gesture: Open Hands</p>
+                <div id="gesture-visual">
+                    <div style="font-size: 36px;">👐</div>
+                </div>
+                <div class="gesture-buttons">
+                    <button class="gesture-btn" id="open-hands">Open Hands</button>
+                    <button class="gesture-btn" id="closed-hands">Closed Hands</button>
+                    <button class="gesture-btn" id="one-hand">One Hand</button>
+                </div>
+            </div>
+            
+            <p class="instructions">
+                Real hand tracking requires a camera and hand tracking library.<br>
+                Use buttons above to simulate gestures.<br>
+                Open hands = Expand particles | Closed hands = Contract particles
+            </p>
+        </div>
+    </div>
+
+    <script>
+        // Initialize Three.js scene
+        let scene, camera, renderer, controls;
+        let particles, particleGeometry, particleMaterial;
+        let handGesture = 'open'; // 'open', 'closed', or 'one'
+        let selectedTemplate = 'heart';
+        let selectedColor = '#ff4d8d';
+        let particleSize = 2.0;
+        let particleSpread = 1.0;
+        
+        // Particle parameters for each template
+        const templates = {
+            heart: { count: 1500, speed: 0.5, shape: 'heart' },
+            flower: { count: 1200, speed: 0.3, shape: 'flower' },
+            saturn: { count: 2000, speed: 0.7, shape: 'ring' },
+            buddha: { count: 1800, speed: 0.4, shape: 'statue' },
+            fireworks: { count: 2500, speed: 1.0, shape: 'explosion' },
+            galaxy: { count: 3000, speed: 0.6, shape: 'spiral' }
+        };
+        
+        // Initialize the scene
+        function init() {
+            // Create scene
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x050510);
+            
+            // Create camera
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.z = 15;
+            
+            // Create renderer
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            document.getElementById('canvas-container').appendChild(renderer.domElement);
+            
+            // Add orbit controls
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            
+            // Add lighting
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+            scene.add(ambientLight);
+            
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(10, 10, 10);
+            scene.add(directionalLight);
+            
+            // Create particle system
+            createParticles();
+            
+            // Add starfield background
+            createStarfield();
+            
+            // Handle window resize
+            window.addEventListener('resize', onWindowResize);
+            
+            // Set up UI event listeners
+            setupUI();
+            
+            // Start animation loop
+            animate();
+        }
+        
+        // Create the particle system
+        function createParticles() {
+            if (particles) {
+                scene.remove(particles);
+                particleGeometry.dispose();
+                particleMaterial.dispose();
+            }
+            
+            const template = templates[selectedTemplate];
+            const count = template.count;
+            
+            // Update particle count display
+            document.getElementById('particle-count').textContent = `Particles: ${count}`;
+            
+            // Create geometry
+            particleGeometry = new THREE.BufferGeometry();
+            const positions = new Float32Array(count * 3);
+            const colors = new Float32Array(count * 3);
+            
+            // Convert hex color to RGB
+            const color = new THREE.Color(selectedColor);
+            
+            // Initialize particle positions based on template
+            for (let i = 0; i < count; i++) {
+                const i3 = i * 3;
+                
+                // Set initial positions based on template shape
+                let x, y, z;
+                
+                switch (selectedTemplate) {
+                    case 'heart':
+                        // Heart shape equation
+                        const t = (i / count) * Math.PI * 2;
+                        x = 16 * Math.pow(Math.sin(t), 3);
+                        y = 13 * Math.cos(t) - 5 * Math.cos(2*t) - 2 * Math.cos(3*t) - Math.cos(4*t);
+                        z = (Math.random() - 0.5) * 2;
+                        break;
+                        
+                    case 'flower':
+                        // Flower shape
+                        const angle = (i / count) * Math.PI * 10;
+                        const radius = 5 + Math.sin(angle * 5) * 2;
+                        x = Math.cos(angle) * radius;
+                        y = Math.sin(angle) * radius;
+                        z = (Math.random() - 0.5) * 3;
+                        break;
+                        
+                    case 'saturn':
+                        // Saturn with rings
+                        if (i < count * 0.3) {
+                            // Planet core
+                            const phi = Math.random() * Math.PI * 2;
+                            const theta = Math.random() * Math.PI;
+                            const r = 2 + Math.random() * 0.5;
+                            x = Math.sin(theta) * Math.cos(phi) * r;
+                            y = Math.sin(theta) * Math.sin(phi) * r;
+                            z = Math.cos(theta) * r;
+                        } else {
+                            // Rings
+                            const ringAngle = (i / count) * Math.PI * 20;
+                            const ringRadius = 4 + Math.random() * 2;
+                            x = Math.cos(ringAngle) * ringRadius;
+                            y = (Math.random() - 0.5) * 0.5;
+                            z = Math.sin(ringAngle) * ringRadius;
+                        }
+                        break;
+                        
+                    case 'buddha':
+                        // Buddha statue silhouette
+                        const buddhaX = (Math.random() - 0.5) * 8;
+                        const buddhaY = Math.random() * 10 - 3;
+                        const buddhaZ = (Math.random() - 0.5) * 2;
+                        x = buddhaX;
+                        y = buddhaY;
+                        z = buddhaZ;
+                        break;
+                        
+                    case 'fireworks':
+                        // Fireworks explosion
+                        const explosionRadius = Math.random() * 5;
+                        const explosionPhi = Math.random() * Math.PI * 2;
+                        const explosionTheta = Math.random() * Math.PI;
+                        x = Math.sin(explosionTheta) * Math.cos(explosionPhi) * explosionRadius;
+                        y = Math.sin(explosionTheta) * Math.sin(explosionPhi) * explosionRadius;
+                        z = Math.cos(explosionTheta) * explosionRadius;
+                        break;
+                        
+                    case 'galaxy':
+                        // Spiral galaxy
+                        const galaxyAngle = (i / count) * Math.PI * 20;
+                        const galaxyRadius = 0.5 + (i / count) * 8;
+                        const galaxyX = Math.cos(galaxyAngle) * galaxyRadius;
+                        const galaxyZ = Math.sin(galaxyAngle) * galaxyRadius;
+                        const galaxyY = (Math.random() - 0.5) * 2;
+                        x = galaxyX;
+                        y = galaxyY;
+                        z = galaxyZ;
+                        break;
+                        
+                    default:
+                        x = (Math.random() - 0.5) * 10;
+                        y = (Math.random() - 0.5) * 10;
+                        z = (Math.random() - 0.5) * 10;
+                }
+                
+                positions[i3] = x * particleSpread;
+                positions[i3 + 1] = y * particleSpread;
+                positions[i3 + 2] = z * particleSpread;
+                
+                // Set colors with some variation
+                colors[i3] = color.r * (0.8 + Math.random() * 0.4);
+                colors[i3 + 1] = color.g * (0.8 + Math.random() * 0.4);
+                colors[i3 + 2] = color.b * (0.8 + Math.random() * 0.4);
+            }
+            
+            particleGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            particleGeometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+            
+            // Create material
+            particleMaterial = new THREE.PointsMaterial({
+                size: particleSize,
+                vertexColors: true,
+                transparent: true,
+                opacity: 0.8,
+                blending: THREE.AdditiveBlending
+            });
+            
+            // Create points (particle system)
+            particles = new THREE.Points(particleGeometry, particleMaterial);
+            scene.add(particles);
+        }
+        
+        // Create starfield background
+        function createStarfield() {
+            const starGeometry = new THREE.BufferGeometry();
+            const starCount = 2000;
+            const starPositions = new Float32Array(starCount * 3);
+            
+            for (let i = 0; i < starCount; i++) {
+                const i3 = i * 3;
+                starPositions[i3] = (Math.random() - 0.5) * 1000;
+                starPositions[i3 + 1] = (Math.random() - 0.5) * 1000;
+                starPositions[i3 + 2] = (Math.random() - 0.5) * 1000;
+            }
+            
+            starGeometry.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
+            
+            const starMaterial = new THREE.PointsMaterial({
+                color: 0xffffff,
+                size: 0.5,
+                transparent: true,
+                opacity: 0.7
+            });
+            
+            const stars = new THREE.Points(starGeometry, starMaterial);
+            scene.add(stars);
+        }
+        
+        // Update particles based on hand gesture
+        function updateParticles() {
+            if (!particles || !particleGeometry) return;
+            
+            const positions = particleGeometry.attributes.position.array;
+            const count = positions.length / 3;
+            
+            // Gesture effect parameters
+            let expansionFactor = 1.0;
+            let speedFactor = 1.0;
+            
+            switch (handGesture) {
+                case 'open':
+                    // Expand particles
+                    expansionFactor = 1.5;
+                    speedFactor = 0.8;
+                    break;
+                case 'closed':
+                    // Contract particles
+                    expansionFactor = 0.5;
+                    speedFactor = 1.5;
+                    break;
+                case 'one':
+                    // Asymmetric expansion
+                    expansionFactor = 1.2;
+                    speedFactor = 1.2;
+                    break;
+            }
+            
+            // Update particle positions based on gesture
+            const time = Date.now() * 0.001 * speedFactor;
+            
+            for (let i = 0; i < count; i++) {
+                const i3 = i * 3;
+                
+                // Get original template-based positions
+                let x, y, z;
+                
+                switch (selectedTemplate) {
+                    case 'heart':
+                        const t = (i / count) * Math.PI * 2 + time * 0.2;
+                        x = 16 * Math.pow(Math.sin(t), 3);
+                        y = 13 * Math.cos(t) - 5 * Math.cos(2*t) - 2 * Math.cos(3*t) - Math.cos(4*t);
+                        z = (Math.random() - 0.5) * 2;
+                        break;
+                        
+                    case 'flower':
+                        const angle = (i / count) * Math.PI * 10 + time * 0.3;
+                        const radius = 5 + Math.sin(angle * 5 + time) * 2;
+                        x = Math.cos(angle) * radius;
+                        y = Math.sin(angle) * radius;
+                        z = (Math.random() - 0.5) * 3;
+                        break;
+                        
+                    case 'saturn':
+                        if (i < count * 0.3) {
+                            // Planet core with rotation
+                            const phi = (i / count) * Math.PI * 2 + time * 0.5;
+                            const theta = (i / count) * Math.PI;
+                            const r = 2 + Math.random() * 0.5;
+                            x = Math.sin(theta) * Math.cos(phi) * r;
+                            y = Math.sin(theta) * Math.sin(phi) * r;
+                            z = Math.cos(theta) * r;
+                        } else {
+                            // Rotating rings
+                            const ringAngle = (i / count) * Math.PI * 20 + time * 0.7;
+                            const ringRadius = 4 + Math.random() * 2;
+                            x = Math.cos(ringAngle) * ringRadius;
+                            y = (Math.random() - 0.5) * 0.5;
+                            z = Math.sin(ringAngle) * ringRadius;
+                        }
+                        break;
+                        
+                    case 'buddha':
+                        // Animated Buddha statue
+                        const buddhaX = (Math.random() - 0.5) * 8 + Math.sin(time + i * 0.01) * 0.5;
+                        const buddhaY = Math.random() * 10 - 3 + Math.cos(time * 0.5 + i * 0.01) * 0.3;
+                        const buddhaZ = (Math.random() - 0.5) * 2;
+                        x = buddhaX;
+                        y = buddhaY;
+                        z = buddhaZ;
+                        break;
+                        
+                    case 'fireworks':
+                        // Animated fireworks
+                        const explosionRadius = Math.random() * 5 + Math.sin(time * 2) * 0.5;
+                        const explosionPhi = (i / count) * Math.PI * 2 + time * 2;
+                        const explosionTheta = (i / count) * Math.PI;
+                        x = Math.sin(explosionTheta) * Math.cos(explosionPhi) * explosionRadius;
+                        y = Math.sin(explosionTheta) * Math.sin(explosionPhi) * explosionRadius;
+                        z = Math.cos(explosionTheta) * explosionRadius;
+                        break;
+                        
+                    case 'galaxy':
+                        // Rotating galaxy
+                        const galaxyAngle = (i / count) * Math.PI * 20 + time * 0.6;
+                        const galaxyRadius = 0.5 + (i / count) * 8;
+                        const galaxyX = Math.cos(galaxyAngle) * galaxyRadius;
+                        const galaxyZ = Math.sin(galaxyAngle) * galaxyRadius;
+                        const galaxyY = (Math.random() - 0.5) * 2 + Math.sin(time + i * 0.02) * 0.5;
+                        x = galaxyX;
+                        y = galaxyY;
+                        z = galaxyZ;
+                        break;
+                        
+                    default:
+                        x = (Math.random() - 0.5) * 10;
+                        y = (Math.random() - 0.5) * 10;
+                        z = (Math.random() - 0.5) * 10;
+                }
+                
+                // Apply gesture effect
+                if (handGesture === 'one') {
+                    // Asymmetric effect for one hand
+                    positions[i3] = x * particleSpread * expansionFactor * (i < count/2 ? 1.2 : 0.8);
+                    positions[i3 + 1] = y * particleSpread * expansionFactor;
+                    positions[i3 + 2] = z * particleSpread * expansionFactor * (i < count/2 ? 0.8 : 1.2);
+                } else {
+                    positions[i3] = x * particleSpread * expansionFactor;
+                    positions[i3 + 1] = y * particleSpread * expansionFactor;
+                    positions[i3 + 2] = z * particleSpread * expansionFactor;
+                }
+            }
+            
+            particleGeometry.attributes.position.needsUpdate = true;
+        }
+        
+        // Set up UI event listeners
+        function setupUI() {
+            // Template selection
+            document.querySelectorAll('.template-btn').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    document.querySelectorAll('.template-btn').forEach(b => b.classList.remove('active'));
+                    this.classList.add('active');
+                    selectedTemplate = this.dataset.template;
+                    createParticles();
+                });
+            });
+            
+            // Color selection
+            document.querySelectorAll('.color-option').forEach(option => {
+                option.addEventListener('click', function() {
+                    document.querySelectorAll('.color-option').forEach(o => o.classList.remove('active'));
+                    this.classList.add('active');
+                    selectedColor = this.dataset.color;
+                    createParticles();
+                });
+            });
+            
+            // Particle size slider
+            const sizeSlider = document.getElementById('size-slider');
+            const sizeValue = document.getElementById('size-value');
+            sizeSlider.addEventListener('input', function() {
+                particleSize = parseFloat(this.value);
+                sizeValue.textContent = particleSize.toFixed(1);
+                if (particleMaterial) {
+                    particleMaterial.size = particleSize;
+                    particleMaterial.needsUpdate = true;
+                }
+            });
+            
+            // Particle spread slider
+            const spreadSlider = document.getElementById('spread-slider');
+            const spreadValue = document.getElementById('spread-value');
+            spreadSlider.addEventListener('input', function() {
+                particleSpread = parseFloat(this.value);
+                spreadValue.textContent = particleSpread.toFixed(1);
+                createParticles();
+            });
+            
+            // Gesture simulation buttons
+            document.getElementById('open-hands').addEventListener('click', function() {
+                setHandGesture('open');
+            });
+            
+            document.getElementById('closed-hands').addEventListener('click', function() {
+                setHandGesture('closed');
+            });
+            
+            document.getElementById('one-hand').addEventListener('click', function() {
+                setHandGesture('one');
+            });
+        }
+        
+        // Set hand gesture and update visual
+        function setHandGesture(gesture) {
+            handGesture = gesture;
+            
+            // Update status text
+            const statusText = document.getElementById('gesture-status');
+            const visual = document.getElementById('gesture-visual');
+            
+            switch (gesture) {
+                case 'open':
+                    statusText.textContent = 'Hands: Detected | Gesture: Open Hands';
+                    visual.innerHTML = '<div style="font-size: 36px;">👐</div>';
+                    visual.style.background = 'rgba(0, 255, 100, 0.2)';
+                    visual.style.transform = 'scale(1.1)';
+                    break;
+                case 'closed':
+                    statusText.textContent = 'Hands: Detected | Gesture: Closed Hands';
+                    visual.innerHTML = '<div style="font-size: 36px;">✊</div>';
+                    visual.style.background = 'rgba(255, 50, 50, 0.2)';
+                    visual.style.transform = 'scale(0.9)';
+                    break;
+                case 'one':
+                    statusText.textContent = 'Hands: Detected | Gesture: One Hand';
+                    visual.innerHTML = '<div style="font-size: 36px;">👋</div>';
+                    visual.style.background = 'rgba(255, 200, 50, 0.2)';
+                    visual.style.transform = 'scale(1.05)';
+                    break;
+            }
+            
+            // Reset visual after animation
+            setTimeout(() => {
+                visual.style.transform = 'scale(1)';
+            }, 300);
+        }
+        
+        // Handle window resize
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+        
+        // Animation loop
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            // Update particles based on gesture
+            updateParticles();
+            
+            // Rotate particles slowly
+            particles.rotation.y += 0.001;
+            particles.rotation.x += 0.0005;
+            
+            // Update controls
+            controls.update();
+            
+            // Render scene
+            renderer.render(scene, camera);
+        }
+        
+        // Initialize the application when page loads
+        window.addEventListener('load', init);
+    </script>
+</body>
+</html>
